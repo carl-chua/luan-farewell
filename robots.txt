@@ -1,3 +1,10 @@
-# Unlisted card. Reachable by link, but shouldn't turn up in search results.
+# NOTE: on a GitHub *project* page this file is decorative. Crawlers only
+# fetch robots.txt from the domain root (carl-chua.github.io/robots.txt),
+# which lives in a different repo — this path is never read.
+#
+# What actually keeps this card out of search results is the
+# <meta name="robots" content="noindex, nofollow"> tag in index.html.
+#
+# Kept so the rule applies if this ever moves to its own domain.
 User-agent: *
 Disallow: /
