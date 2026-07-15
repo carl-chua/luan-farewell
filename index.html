@@ -560,9 +560,12 @@ body{
   <div class="phone">
     <div class="notch"></div>
 
-    <!-- metadata, not auto: iOS ignores preload anyway, and this saves phones
-         on cellular from pulling 2MB nobody asked for until they tap play -->
-    <audio id="bgm" loop preload="metadata"></audio>
+    <!-- auto, deliberately. `metadata` saves ~2MB on cellular, but then play()
+         has to start the fetch inside the tap handler — and iOS Chrome and
+         in-app webviews don't keep the user-gesture token alive across that,
+         so nothing ever plays. Buffering ahead makes play() instant and is
+         the difference between working and not working there. -->
+    <audio id="bgm" loop preload="auto"></audio>
     <button class="mute idle" id="mute" data-state="off" hidden aria-label="Toggle sound">
       <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>
@@ -876,11 +879,30 @@ bgm.src = AUDIO_SRC;
    a user gesture, so canplay never fires there and the button would stay
    hidden forever on exactly the device most people open this on. */
 muteBtn.hidden = false;
-bgm.addEventListener("error", () => { muteBtn.hidden = true; });
+
+/* iOS makes .volume read-only — assigning to it is a silent no-op. Detect that
+   once here rather than assume: without it the fade below reads 1 back forever,
+   never converges, spins a timer every 40ms for the life of the page, and the
+   mute button never actually mutes. */
+const CAN_FADE = (() => {
+  const keep = bgm.volume;
+  bgm.volume = 0.42;
+  const ok = Math.abs(bgm.volume - 0.42) < 0.01;
+  bgm.volume = keep;
+  return ok;
+})();
+
+/* Only a genuinely undecodable or missing source should retire the button.
+   A network blip or an aborted speculative load deserves another tap.
+   (4 = MEDIA_ERR_SRC_NOT_SUPPORTED) */
+bgm.addEventListener("error", () => {
+  if (bgm.error && bgm.error.code === 4) muteBtn.hidden = true;
+});
 
 let fadeTimer;
 const fadeTo = target => {
   clearInterval(fadeTimer);
+  if (!CAN_FADE) { bgm.muted = target === 0; return; }   // iOS: on/off is all we get
   fadeTimer = setInterval(() => {
     const gap = target - bgm.volume;
     if (Math.abs(gap) < .02) { bgm.volume = target; clearInterval(fadeTimer); return; }
@@ -897,7 +919,8 @@ muteBtn.addEventListener("click", () => {
   muteBtn.classList.remove("idle");
 
   if (bgm.paused) {
-    bgm.volume = 0;
+    // Nothing async before play() — the user-gesture token must still be live.
+    if (CAN_FADE) bgm.volume = 0; else bgm.muted = false;
     bgm.play()
       .then(() => { muteBtn.dataset.state = "on"; fadeTo(VOLUME); })
       .catch(err => {
