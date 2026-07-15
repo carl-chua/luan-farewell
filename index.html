@@ -522,6 +522,7 @@ body{
   }
   .notch{display:none}
   .tabs{padding-top:16px}
+  .mute{top:14px}          /* follow the tabs up now the notch is gone */
   .ambient{display:none}
   .cap{padding-right:76px}
 }
@@ -559,7 +560,9 @@ body{
   <div class="phone">
     <div class="notch"></div>
 
-    <audio id="bgm" loop preload="auto"></audio>
+    <!-- metadata, not auto: iOS ignores preload anyway, and this saves phones
+         on cellular from pulling 2MB nobody asked for until they tap play -->
+    <audio id="bgm" loop preload="metadata"></audio>
     <button class="mute idle" id="mute" data-state="off" hidden aria-label="Toggle sound">
       <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>
@@ -868,8 +871,11 @@ const muteBtn = document.getElementById("mute");
 
 bgm.src = AUDIO_SRC;
 
-/* only reveal the control once we know the file actually plays */
-bgm.addEventListener("canplay", () => { muteBtn.hidden = false; }, { once: true });
+/* Show the button optimistically, hide it only if the audio genuinely fails.
+   It CANNOT be revealed on `canplay`: iOS Safari won't preload audio without
+   a user gesture, so canplay never fires there and the button would stay
+   hidden forever on exactly the device most people open this on. */
+muteBtn.hidden = false;
 bgm.addEventListener("error", () => { muteBtn.hidden = true; });
 
 let fadeTimer;
@@ -894,7 +900,11 @@ muteBtn.addEventListener("click", () => {
     bgm.volume = 0;
     bgm.play()
       .then(() => { muteBtn.dataset.state = "on"; fadeTo(VOLUME); })
-      .catch(() => {});
+      .catch(err => {
+        // Only a genuinely unplayable file should retire the button. Anything
+        // else (a blocked gesture, a stalled network) deserves another tap.
+        if (err && err.name === "NotSupportedError") muteBtn.hidden = true;
+      });
     return;
   }
 
