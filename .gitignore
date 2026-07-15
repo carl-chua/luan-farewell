@@ -1,0 +1,6 @@
+.DS_Store
+.playwright-mcp/
+
+# Full-res originals stay local — the site only needs the web-sized copies,
+# and there's no reason to publish higher-res photos of the team than necessary.
+images/original/

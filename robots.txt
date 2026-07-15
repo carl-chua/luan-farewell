@@ -1,0 +1,3 @@
+# Unlisted card. Reachable by link, but shouldn't turn up in search results.
+User-agent: *
+Disallow: /
